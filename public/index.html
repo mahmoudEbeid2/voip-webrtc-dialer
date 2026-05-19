@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twilio WebRTC Voice Client</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Readex+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- External Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Recordings Sidebar Panel (Left) -->
+    <div class="recordings-panel">
+      <div class="panel-header">
+        <h2><i class="fa-solid fa-microphone-lines"></i> Recordings</h2>
+        <button id="btnRefreshRecordings" class="refresh-btn" title="Refresh Recordings">
+          <i class="fa-solid fa-arrows-rotate"></i>
+        </button>
+      </div>
+      <div id="recordingsList" class="recordings-list">
+        <div class="no-recordings">
+          <i class="fa-solid fa-folder-open" style="font-size: 1.5rem; opacity: 0.5;"></i>
+          No recordings found
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Dialer Container (Right) -->
+    <div class="container">
+    <!-- Incoming Call Overlay -->
+    <div id="incomingCallOverlay" class="incoming-overlay">
+      <div class="incoming-icon"><i class="fa-solid fa-phone-volume"></i></div>
+      <div class="incoming-title">Incoming Call</div>
+      <div id="incomingCallerId" class="incoming-number">client:unknown</div>
+      <div class="incoming-buttons">
+        <button id="btnAcceptCall" class="incoming-btn incoming-btn-accept">
+          <i class="fa-solid fa-phone"></i> Answer
+        </button>
+        <button id="btnDeclineCall" class="incoming-btn incoming-btn-decline">
+          <i class="fa-solid fa-phone-slash"></i> Decline
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Dialer -->
+    <header>
+      <h1>Test Calling System</h1>
+      <div class="subtitle">Call between Browser & Mobile Phone</div>
+      <div class="status-badge">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="statusText">Checking status...</span>
+      </div>
+    </header>
+
+    <main>
+      <!-- Dialer Screen -->
+      <div class="dialer-screen">
+        <div class="phone-input-wrapper">
+          <span class="phone-input-icon"><i class="fa-solid fa-hashtag"></i></span>
+          <input type="text" id="phoneNumber" class="phone-input" placeholder="Enter number or client" value="+201033599984">
+          <span id="btnClearInput" class="phone-input-clear"><i class="fa-solid fa-circle-xmark"></i></span>
+        </div>
+      </div>
+
+      <!-- Keypad -->
+      <div class="keypad-grid">
+        <div class="keypad-btn" onclick="pressKey('1')">
+          <span class="keypad-number">1</span>
+          <span class="keypad-letters">&nbsp;</span>
+        </div>
+        <div class="keypad-btn" onclick="pressKey('2')">
+          <span class="keypad-number">2</span>
+          <span class="keypad-letters">abc</span>
+        </div>
+        <div class="keypad-btn" onclick="pressKey('3')">
+          <span class="keypad-number">3</span>
+          <span class="keypad-letters">def</span>
+        </div>
+        <div class="keypad-btn" onclick="pressKey('4')">
+          <span class="keypad-number">4</span>
+          <span class="keypad-letters">ghi</span>
+        </div>
+        <div class="keypad-btn" onclick="pressKey('5')">
+          <span class="keypad-number">5</span>
+          <span class="keypad-letters">jkl</span>
+        </div>
+        <div class="keypad-btn" onclick="pressKey('6')">
+          <span class="keypad-number">6</span>
+          <span class="keypad-letters">mno</span>
+        </div>
+        <div class="keypad-btn" onclick="pressKey('7')">
+          <span class="keypad-number">7</span>
+          <span class="keypad-letters">pqrs</span>
+        </div>
+        <div class="keypad-btn" onclick="pressKey('8')">
+          <span class="keypad-number">8</span>
+          <span class="keypad-letters">tuv</span>
+        </div>
+        <div class="keypad-btn" onclick="pressKey('9')">
+          <span class="keypad-number">9</span>
+          <span class="keypad-letters">wxyz</span>
+        </div>
+        <div class="keypad-btn" onclick="pressKey('*')">
+          <span class="keypad-number">*</span>
+          <span class="keypad-letters">&nbsp;</span>
+        </div>
+        <div class="keypad-btn" onclick="pressKey('0')">
+          <span class="keypad-number">0</span>
+          <span class="keypad-letters">+</span>
+        </div>
+        <div class="keypad-btn" onclick="pressKey('#')">
+          <span class="keypad-number">#</span>
+          <span class="keypad-letters">&nbsp;</span>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="call-controls">
+        <button id="btnMute" class="control-btn btn-mute" disabled>
+          <i class="fa-solid fa-microphone-slash"></i>
+        </button>
+        <button id="btnCall" class="control-btn btn-call">
+          <i class="fa-solid fa-phone"></i>
+        </button>
+        <button id="btnHangup" class="control-btn btn-hangup">
+          <i class="fa-solid fa-phone-slash"></i>
+        </button>
+      </div>
+
+      <!-- Console Logs -->
+      <div class="console-panel">
+        <div class="console-header">
+          <span>System Console Logs</span>
+          <span style="cursor:pointer;" onclick="clearLogs()">Clear</span>
+        </div>
+        <div id="logs" class="console-logs">
+          <!-- Logs will go here -->
+        </div>
+      </div>
+    </main>
+  </div>
+  </div>
+
+  <!-- Twilio Voice Client SDK (via jsDelivr) -->
+  <script src="https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2.11.2/dist/twilio.min.js"></script>
+
+  <!-- External Application Logic -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
