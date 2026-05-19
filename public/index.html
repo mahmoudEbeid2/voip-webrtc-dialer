@@ -31,6 +31,15 @@
           No recordings found
         </div>
       </div>
+
+      <!-- Mini Audio Player (Bottom of Recordings Panel) -->
+      <div id="audioPlayerContainer" class="audio-player-container" style="display: none;">
+        <div class="player-info">
+          <span id="playerTrackName">No track selected</span>
+          <span id="btnClosePlayer" class="close-player-btn" title="Close Player">&times;</span>
+        </div>
+        <audio id="audioElement" controls class="custom-audio-element"></audio>
+      </div>
     </div>
 
     <!-- Main Dialer Container (Right) -->
