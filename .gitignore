@@ -1,0 +1,30 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Local env files (MUST NEVER BE UPLOADED - SENSITIVE CREDENTIALS)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Local database / call recordings data
+db/recordings.json
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / System directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
