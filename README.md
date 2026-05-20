@@ -629,8 +629,8 @@ If you receive an `EADDRINUSE: address already in use :::5000` error:
 
 ---
 
-## 👤 Project Maintainer & Lead Developer
+## 👤 Project Author
 
 * **Name:** Mahmoud Ebead
-* **Role:** VoIP Software Engineer & Web Developer
+* **Role:** Software Engineer
 * **Professional Profile:** Connect and follow my work on [LinkedIn](https://www.linkedin.com/in/mahmoud-ebead/)
