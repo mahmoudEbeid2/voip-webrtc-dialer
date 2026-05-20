@@ -316,6 +316,7 @@ main {
 }
 
 .btn-mute {
+  display: none;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--glass-border);
   color: var(--text-main);

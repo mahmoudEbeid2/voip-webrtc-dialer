@@ -46,10 +46,12 @@ export function toggleCallControlsUI(isOnCall) {
   if (isOnCall) {
     DOM.btnCall.style.display = 'none';
     DOM.btnHangup.style.display = 'flex';
+    DOM.btnMute.style.display = 'flex';
     DOM.btnMute.disabled = false;
   } else {
     DOM.btnCall.style.display = 'flex';
     DOM.btnHangup.style.display = 'none';
+    DOM.btnMute.style.display = 'none';
     DOM.btnMute.disabled = true;
     DOM.btnMute.className = 'control-btn btn-mute'; // Reset muted design
   }

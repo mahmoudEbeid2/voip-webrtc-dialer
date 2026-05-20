@@ -83,6 +83,28 @@ Forwarding     https://a1b2-34-56-78.ngrok-free.app -> http://localhost:5000
 ```
 Keep this terminal open. Copy the HTTPS forwarding address (`https://*.ngrok-free.app`).
 
+> [!WARNING]
+> ### ⚠️ Critical Note for Developers: Dynamic ngrok URLs & Twilio Integration
+> 
+> * **The Dynamic URL Issue:** Running the standard free command `ngrok http 5000` generates a brand new, randomized URL (e.g. `https://a1b2-34-56-78.ngrok-free.app`) every time you restart the process.
+> * **Impact on Twilio & TwiML App:** Twilio dispatches active call Webhooks to the destination URL saved inside your **TwiML App** settings. If the ngrok URL changes and is not updated in Twilio, calls will fail immediately with connection timeouts because Twilio will attempt to route traffic to the expired domain.
+> 
+> **💡 Manual Solution (Update URL on Every Restart):**
+> Every time you run ngrok and receive a new temporary domain, you must:
+> 1. Copy the new HTTPS URL from the terminal.
+> 2. Go to **Twilio Console** ➔ **Voice** ➔ **Manage** ➔ **TwiML Apps** ➔ Select your App.
+> 3. Update the **Voice Request URL** field to the new URL with the `/voice` route (e.g., `https://xxxx.ngrok-free.app/voice`).
+> 4. Click **Save**.
+> 
+> **🚀 Professional Solution (Static Free Domain):**
+> To avoid configuring Twilio manually on every restart, claim a permanent free subdomain in your ngrok account:
+> 1. Log in to the ngrok dashboard and claim your free static domain (e.g., `mahmoud-voip.ngrok-free.app`).
+> 2. Initialize the tunnel using the `--url` flag to associate it with your reserved domain:
+>    ```bash
+>    ngrok http --url=mahmoud-voip.ngrok-free.app 5000
+>    ```
+> 3. Point your Twilio **TwiML App** voice request URL to this static address (e.g., `https://mahmoud-voip.ngrok-free.app/voice`) **once**, and you will never need to update the Twilio Console settings again.
+
 ---
 
 ## 📁 File Structure
@@ -189,6 +211,117 @@ graph TD
   * Coordinates document startup.
   * Prompts the browser for audio microphone access (`navigator.mediaDevices.getUserMedia`) early to prevent permission latency during call setups.
   * Starts the device registration flow and schedules the recording polling interval.
+
+### 3. Detailed Twilio Service Reference (`services/twilioService.js`)
+
+This service encapsulates all core Twilio logic, TwiML generation, and filesystem-based database persistence operations.
+
+---
+
+#### 🔹 `getAccessTokenResponse(rawIdentity)`
+Generates a secure JSON Web Token (JWT) required to register the client-side browser WebRTC Device with Twilio's VoIP gateway.
+* **Parameters:**
+  * `rawIdentity` `(string)`: The unique client ID representing the browser client (defaults to `mahmoud_browser`).
+* **Workflow:**
+  1. Instantiates `twilio.jwt.AccessToken` using `Account_SID`, `API_Key_SID`, and `API_Key_Secret`.
+  2. Configures a `VoiceGrant` with `incomingAllow: true` (enables incoming calls) and sets `outgoingApplicationSid` to the `TwiML_App_SID`.
+  3. Attaches the grant to the token and generates the JWT.
+* **Returns:**
+  ```json
+  {
+    "status": 200,
+    "data": {
+      "identity": "mahmoud_browser",
+      "token": "eyJhbGciOi..."
+    }
+  }
+  ```
+
+---
+
+#### 🔹 `getVoiceWebhookResponse(to, from, host)`
+Processes call routing dynamically and generates standard TwiML XML responses based on incoming/outgoing target parameters.
+* **Parameters:**
+  * `to` `(string)`: The target phone number or client identifier.
+  * `from` `(string)`: The calling party.
+  * `host` `(string)`: The request domain (e.g. ngrok tunnel domain) used to construct absolute webhook URLs.
+* **Dialing Scenarios:**
+  * **Incoming Call (To Twilio Phone Number):**
+    If the caller dialed the Twilio phone number, Twilio answers and routes it to the WebRTC client:
+    ```xml
+    <Response>
+      <Dial record="record-from-answer-dual" recordingStatusCallback="https://<ngrok>/recording-callback">
+        <Client>mahmoud_browser</Client>
+      </Dial>
+    </Response>
+    ```
+  * **Outgoing Call (To Any Phone Number):**
+    If the client dialed a number from the browser keypad, Twilio calls the external line:
+    ```xml
+    <Response>
+      <Dial callerId="<twilio-phone-number>" record="record-from-answer-dual" recordingStatusCallback="https://<ngrok>/recording-callback">
+        <Number>+2010...</Number>
+      </Dial>
+    </Response>
+    ```
+* **Returns:** An object with `{ status: 200, type: 'text/xml', content: '<TwiML XML string>' }`.
+
+---
+
+#### 🔹 `getTestCallResponse(host)`
+Triggers an automated outbound call programmatically using the Twilio REST Client API.
+* **Parameters:**
+  * `host` `(string)`: The domain name used to construct recording callback webhooks.
+* **Workflow:**
+  1. Calls `twilioClient.calls.create()`.
+  2. Sets destination to `My_Phone_Number` and caller ID to `Twilio_Phone_Number`.
+  3. Configures dual-channel recording and the status callback.
+* **Returns:**
+  ```json
+  {
+    "status": 200,
+    "message": "call has been sent"
+  }
+  ```
+
+---
+
+#### 🔹 `handleRecordingCallback(body)`
+Acts as the webhook handler for Twilio's async recording status events. Saves audio links and durations to local storage.
+* **Parameters:**
+  * `body` `(object)`: Parsed POST body from Twilio containing: `CallSid`, `RecordingSid`, `RecordingDuration`, `RecordingUrl`.
+* **Workflow:**
+  1. Reads existing calls history from `db/recordings.json`.
+  2. Compiles a JSON object containing SIDs, call duration, timestamp, and a direct link to the `.mp3` media.
+  3. Inserts the record at index `0` and trims the array if it exceeds 100 entries.
+  4. Saves the updated history back to the database.
+* **Returns:**
+  ```json
+  {
+    "status": 200,
+    "message": "Recording metadata saved successfully."
+  }
+  ```
+
+---
+
+#### 🔹 `getRecordingsList()`
+A simple query function retrieving the persistent recordings list.
+* **Returns:**
+  ```json
+  {
+    "status": 200,
+    "data": [
+      {
+        "callSid": "CA...",
+        "recordingSid": "RE...",
+        "duration": "12",
+        "url": "https://api.twilio.com/.../RE....mp3",
+        "timestamp": "2026-05-20T12:00:00.000Z"
+      }
+    ]
+  }
+  ```
 
 ---
 
