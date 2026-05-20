@@ -1,44 +1,59 @@
-# 📖 Comprehensive Codebase Service Documentation: `services/twilioService.js`
+# 📖 Deep-Dive Architectural & Code Reference: `services/twilioService.js`
 
-This documentation provides an exhaustive, statement-by-statement, and line-by-line developer reference guide for the backend VoIP orchestration logic within `services/twilioService.js`. It details the core JavaScript runtime behavior, security parameters, Twilio API interactions, TwiML generation, and webhook processing mechanisms.
-
----
-
-## 📂 Section 1: Module Scope & Imports
-
-This section handles standard Node.js module loading and environment initialization.
-
-### Line-by-Line Code Breakdown
-
-#### `import twilio from 'twilio';`
-* **Syntax and Logic:** Uses standard ES Module syntax to load the default exported object from the third-party `twilio` helper package.
-* **Why it is needed:** The `twilio` module encapsulates all Twilio REST API request mechanisms, security helpers for JWT (JSON Web Tokens) creation, and markup generation helpers for returning XML-based Voice Responses (TwiML).
-
-#### `import fs from 'fs';`
-* **Syntax and Logic:** Loads Node's built-in File System (`fs`) module.
-* **Why it is needed:** The application stores call histories in a local file repository (`db/recordings.json`). `fs` provides the tools to synchronously query, read, and write this file on disk.
-
-#### `import path from 'path';`
-* **Syntax and Logic:** Loads Node's core `path` system library.
-* **Why it is needed:** Web apps are deployed across differing file systems (such as Windows backslashes and Linux forward slashes). Using `path` operations guarantees that relative file mappings successfully resolve to absolute server disk paths without cross-platform formatting issues.
-
-#### `const twilioClient = twilio(process.env.Account_SID, process.env.Auth_Token);`
-* **Syntax and Logic:** Instantiates a pre-authenticated HTTP REST client by calling the `twilio()` factory function, passing two environment variables: `Account_SID` and `Auth_Token`.
-* **Why it is needed:** This global REST client wrapper handles outgoing API calls to Twilio. It is used in this service to trigger outbound testing calls via `twilioClient.calls.create()`.
-
-#### `const RECORDINGS_FILE = path.resolve('db/recordings.json');`
-* **Syntax and Logic:** Resolves the relative path string `'db/recordings.json'` into a fully-qualified absolute system path.
-* **Why it is needed:** Hardcoding relative paths can fail if the Node process is started from another folder. `path.resolve` locks the file location to the project's root `db/` folder.
+This document provides a highly detailed developer guide for the service layer located in `services/twilioService.js`. Each code block is presented in full, followed by an exhaustive breakdown of the JavaScript syntax, Node.js runtime operations, network protocols, Twilio APIs, and cryptographic mechanisms.
 
 ---
 
-## 💾 Section 2: Internal File Database Helpers
+## 🛠️ Section 1: Module Scope, Imports & Global Instantiations
 
-These private functions manage the file-based JSON persistence layer.
+This section initializes the necessary library dependencies and sets up the Twilio REST API client configuration.
 
-### 🔹 Function: `readRecordingsFromFile()`
+### 📝 Complete Code Block
+```javascript
+import twilio from 'twilio';
+import fs from 'fs';
+import path from 'path';
 
-This function checks for the presence of the recordings history file and retrieves its array payload.
+const twilioClient = twilio(process.env.Account_SID, process.env.Auth_Token);
+
+// Path to store recordings JSON file
+const RECORDINGS_FILE = path.resolve('db/recordings.json');
+```
+
+### 🔍 Deep-Dive Explanation
+
+#### 1. Dependency Imports (`Lines 1-3`)
+* **`import twilio from 'twilio';`**
+  * **What it does:** Imports the complete namespace of the official Node.js helper library provided by Twilio.
+  * **Under the Hood:** This library acts as an SDK wrapper around Twilio's HTTP APIs. It provides class structures to generate XML TwiML responses, class builders to construct secure JSON Web Tokens (JWT) for browser WebRTC clients, and an HTTP client wrapper to fire REST queries to Twilio's servers.
+* **`import fs from 'fs';`**
+  * **What it does:** Imports the core Node.js File System module.
+  * **Under the Hood:** It allows direct interaction with the host operating system's file system. In this service, it is used for synchronous file checking, reading, and writing to maintain a local JSON data store.
+* **`import path from 'path';`**
+  * **What it does:** Imports the core Node.js Path utility module.
+  * **Under the Hood:** Resolves file paths across different operating systems. For example, Windows uses backslashes (`\`) while Unix-like systems (Linux, macOS) use forward slashes (`/`). `path` handles these differences automatically behind the scenes.
+
+#### 2. REST Client Instantiation (`Line 5`)
+* **`const twilioClient = twilio(process.env.Account_SID, process.env.Auth_Token);`**
+  * **What it does:** Initializes an authenticated REST client instance.
+  * **Under the Hood:**
+    * `process.env.Account_SID`: The unique public key/identifier of your Twilio developer account.
+    * `process.env.Auth_Token`: The master password/token for your Twilio account.
+    * The `twilio(...)` wrapper uses these credentials to authorize HTTP requests. Every call made with `twilioClient` includes an `Authorization: Basic <base64(SID:Token)>` header to securely authenticate requests to Twilio's endpoints.
+
+#### 3. Database Path Resolution (`Line 8`)
+* **`const RECORDINGS_FILE = path.resolve('db/recordings.json');`**
+  * **What it does:** Resolves a relative path to a absolute system path.
+  * **Under the Hood:** `path.resolve` takes the current working directory (`process.cwd()`) and appends `'db/recordings.json'` to create a solid system path. This ensures that the application reads the same database file even if started from a nested subfolder.
+
+---
+
+## 💾 Section 2: Local Database Filesystem Persistence (Private Helpers)
+
+These functions implement a simple JSON-based database for logging call recording metadata.
+
+### 🔹 Helper 1: `readRecordingsFromFile()`
+Reads the local JSON file and parses it into a JavaScript array.
 
 ```javascript
 function readRecordingsFromFile() {
@@ -54,27 +69,20 @@ function readRecordingsFromFile() {
 }
 ```
 
-#### Line-by-Line Statement Explanation:
-* **`function readRecordingsFromFile() {`**
-  Declares the private helper function inside the module. It takes no arguments and returns a parsed JavaScript Array of metadata objects.
-* **`try {`**
-  Opens a try-catch exception block. This is critical for preventing disk lockups or read failures from crashing the Node.js process.
-* **`if (fs.existsSync(RECORDINGS_FILE)) {`**
-  Calls `fs.existsSync` to synchronously query if the target database file is present. This avoids throwing "File Not Found" errors.
-* **`const data = fs.readFileSync(RECORDINGS_FILE, 'utf8');`**
-  Synchronously reads the raw binary contents of the file, converting it immediately to an encoded string using UTF-8 character encoding.
-* **`return JSON.parse(data || '[]');`**
-  Parses the raw JSON string into a live JavaScript array of objects. The logical OR `|| '[]'` ensures that if the file exists but contains a null or empty string, it safely parses an empty array `[]` rather than throwing a JSON parsing exception.
-* **`} catch (err) { console.error(...); }`**
-  Catches any I/O disk reading or parsing exceptions, logs the warning stack trace, and allows the thread to continue.
-* **`return [];`**
-  Fallback statement. If the file did not exist or an exception occurred, it returns a safe empty list.
+#### 🔍 Deep-Dive Explanation
+* **Exception Handling (`try-catch`):** File read operations can fail for multiple reasons (such as incorrect file permissions, file system corruption, or concurrent write locks). Wrapping the code in `try-catch` ensures that any such issues do not crash the Express server.
+* **`fs.existsSync(RECORDINGS_FILE)`:**
+  * **Why it is used:** Before attempting to read a file, the code checks if the file exists on the disk. Without this check, calling `fs.readFileSync` on a non-existent file would throw an `ENOENT` error.
+* **`fs.readFileSync(RECORDINGS_FILE, 'utf8')`:**
+  * **Why it is used:** Reads the file synchronously. The `'utf8'` encoding parameter is crucial: it instructs Node.js to decode the raw file bytes into a readable text string. If omitted, the function would return a raw binary Buffer instead of text.
+* **`JSON.parse(data || '[]')`:**
+  * **Why it is used:** Converts the raw text back into a live JavaScript array of objects.
+  * **Short-circuit Evaluation (`data || '[]'`):** If the file exists but is completely empty (0 bytes), the variable `data` will be empty. Attempting to run `JSON.parse("")` directly throws a syntax error. Passing `'[]'` as a fallback prevents this error and returns an empty array instead.
 
 ---
 
-### 🔹 Function: `writeRecordingsToFile(recordings)`
-
-Saves modified call logs back to disk, creating the directory tree if necessary.
+### 🔹 Helper 2: `writeRecordingsToFile(recordings)`
+Saves the updated array of recordings back to disk.
 
 ```javascript
 function writeRecordingsToFile(recordings) {
@@ -90,31 +98,22 @@ function writeRecordingsToFile(recordings) {
 }
 ```
 
-#### Line-by-Line Statement Explanation:
-* **`function writeRecordingsToFile(recordings) {`**
-  Declares the writer helper. It accepts one parameter: a JavaScript array containing call recording objects.
-* **`const dir = path.dirname(RECORDINGS_FILE);`**
-  Uses `path.dirname` to isolate the directory portion of the absolute path (`db`).
-* **`if (!fs.existsSync(dir)) {`**
-  Checks if the folder containing the database exists.
-* **`fs.mkdirSync(dir, { recursive: true });`**
-  If the folder is missing, it is created. The `{ recursive: true }` option ensures that intermediate parent folders are created without raising errors.
-* **`fs.writeFileSync(RECORDINGS_FILE, JSON.stringify(recordings, null, 2), 'utf8');`**
-  Serializes the JavaScript array into a readable JSON string using 2-space indentation (which makes editing/viewing the JSON file easier). It then writes this string synchronously to the disk, overwriting the previous contents of the file.
-* **`} catch (err) { console.error(...); }`**
-  Logs write failures (such as permission denials or full disks) to the console to assist developers in debugging.
+#### 🔍 Deep-Dive Explanation
+* **`path.dirname(RECORDINGS_FILE)`:**
+  * **Why it is used:** Extracts the directory structure containing the database file (in this case, the `db` folder).
+* **`fs.mkdirSync(dir, { recursive: true })`:**
+  * **Why it is used:** Checks if the directory exists. If it is missing (for example, on a clean setup), it creates the directory. The `{ recursive: true }` option ensures that it can create nested parent directories without throwing errors.
+* **`fs.writeFileSync(RECORDINGS_FILE, JSON.stringify(recordings, null, 2), 'utf8')`:**
+  * **Why it is used:** Writes the updated array back to disk.
+  * **Formatting (`JSON.stringify(..., null, 2)`):** Converts the JavaScript array into a readable JSON string. The `null` parameter is for the optional replace function, and `2` specifies the number of spaces to use for indentation. Writing it this way makes the JSON file human-readable for easier debugging.
 
 ---
 
-## 🔌 Section 3: Exported VoIP Orchestration Core Logic
+## 🔌 Section 3: WebRTC Access Token Engine
 
-These functions represent the API endpoints that power WebRTC signaling, routing, call logs, and call recording.
-
----
+This function handles WebRTC client authorization, allowing the browser to act as a secure phone terminal.
 
 ### 🔹 Function: `getAccessTokenResponse(rawIdentity)`
-
-Generates a cryptographically signed JSON Web Token (JWT) authorizing browser clients to register with Twilio's VoIP signaling gateway.
 
 ```javascript
 export function getAccessTokenResponse(rawIdentity) {
@@ -153,35 +152,32 @@ export function getAccessTokenResponse(rawIdentity) {
 }
 ```
 
-#### Line-by-Line Statement Explanation:
-* **`export function getAccessTokenResponse(rawIdentity) {`**
-  Declares and exports the token generator. It accepts the dynamic client username (`rawIdentity`) from the API request query.
-* **`const identity = rawIdentity || 'mahmoud_browser';`**
-  Ensures that if the request did not pass an identity value, the user falls back to the default identity `'mahmoud_browser'`.
-* **`const AccessToken = twilio.jwt.AccessToken;`**
-  Destructures the JWT utility class `AccessToken` from the `twilio` library.
-* **`const VoiceGrant = AccessToken.VoiceGrant;`**
-  Extracts the specialized `VoiceGrant` helper subclass. Grants dictate the target capabilities allowed by the client (such as SMS, Chat, or Voice).
-* **`if (!process.env.API_Key_SID || !process.env.API_Key_Secret || !process.env.TwiML_App_SID) { ... }`**
-  Guard clause checking for required environment credentials. If any of them are missing, the server throws an error immediately to halt token creation.
-* **`const token = new AccessToken(...)`**
-  Instantiates the JWT token object. It passes the Twilio Account SID, the API Key SID, and the API Key Secret. This setup allows the client to register without exposing the master account password. The final argument assigns the client's WebRTC username.
-* **`token.identity = identity;`**
-  Binds the client username to the token. This registers the client under this identity on Twilio's gateway, making them reachable for incoming calls.
-* **`const voiceGrant = new VoiceGrant({ ... });`**
-  Instantiates the voice permissions:
-  * `outgoingApplicationSid`: Links outgoing calls to our TwiML application SID, which handles the routing webhooks.
-  * `incomingAllow: true`: Instructs Twilio's gateway to route calls targeting this client username to the browser WebRTC socket.
-* **`token.addGrant(voiceGrant);`**
-  Attaches the Voice Grant permissions to the token.
-* **`return { status: 200, data: { identity, token: token.toJwt() } };`**
-  Compiles the payload. `.toJwt()` signs the token cryptographically using the API secret, producing a base64 JWT string to be sent to the client.
+#### 🔍 Deep-Dive Explanation
+* **Identity Fallback (`const identity = rawIdentity || 'mahmoud_browser';`):**
+  * **Why it is used:** Binds the WebRTC connection to a unique identifier. If the client does not specify an identity, the code falls back to the default identifier `'mahmoud_browser'`.
+* **Twilio Access Token Classes (`Lines 46-47`):**
+  * **`AccessToken`:** This class is responsible for creating a JSON Web Token (JWT).
+  * **`VoiceGrant`:** A security grant class. By attaching a Voice Grant to the JWT, we authorize the bearer of the token to use Twilio's VoIP gateways.
+* **Credentials Guard Clause (`Lines 49-51`):**
+  * Checks if the required environment variables are configured. If any variable is missing, it throws an error immediately to prevent the server from issuing invalid tokens.
+* **JWT Constructor Arguments (`Lines 53-58`):**
+  * `Account_SID`: Associates the token with your Twilio account.
+  * `API_Key_SID`: Acts as the public API key. Starts with `SK...`.
+  * `API_Key_Secret`: The private signing key. It is used to generate the cryptographic signature at the end of the JWT.
+  * `{ identity }`: Registers the client ID on Twilio's servers, allowing them to route calls to this specific client.
+* **Voice Grant Configuration (`Lines 62-65`):**
+  * `outgoingApplicationSid`: Binds the token to a **TwiML App SID** (`AP...`). When the WebRTC client initiates an outbound call, Twilio checks this App SID to find the webhook URL for routing instructions.
+  * `incomingAllow: true`: Instructs Twilio to allow incoming calls for this client identity.
+* **Cryptographic Serialization (`token.toJwt()`):**
+  * Generates the final JWT string. The JWT consists of three base64url-encoded parts separated by dots: **Header** (defines token type and algorithm, typically HS256), **Payload** (contains the Account SID, Identity, and Voice Grants), and **Signature** (verifies that the token was signed by your API Secret and has not been altered).
 
 ---
 
-### 🔹 Function: `getVoiceWebhookResponse(to, from, host)`
+## 📡 Section 4: Dynamic Voice Routing (TwiML Webhook)
 
-Processes call routing logic and returns TwiML (Twilio Markup Language) instructions in XML format to guide Twilio's voice server dynamically.
+This function generates the TwiML instructions that control active call behavior.
+
+### 🔹 Function: `getVoiceWebhookResponse(to, from, host)`
 
 ```javascript
 export function getVoiceWebhookResponse(to, from, host) {
@@ -225,39 +221,39 @@ export function getVoiceWebhookResponse(to, from, host) {
 }
 ```
 
-#### Line-by-Line Statement Explanation:
-* **`export function getVoiceWebhookResponse(to, from, host) {`**
-  Declares and exports the voice routing controller handler. It processes the destination (`to`), caller (`from`), and host server domain (`host`).
-* **`const twiml = new twilio.twiml.VoiceResponse();`**
-  Initializes a TwiML generation instance to programmatically construct XML output.
-* **`const callbackUrl = \`https://\${host}/recording-callback\`;`**
-  Constructs the absolute HTTPS callback endpoint dynamically. This guarantees that whether running on a local server or via a dynamic ngrok domain, the webhook callback points back to our active host.
-* **`if (to === process.env.Twilio_Phone_Number) {`**
-  Checks if the call is routed to our Twilio number. If yes, it is an **incoming call** from a telephone network.
-* **`const dial = twiml.dial({ ... });`**
-  Appends a `<Dial>` node to instruct Twilio to bridge the call:
-  * `record: 'record-from-answer-dual'`: Enables automatic recording. Recording starts once the caller and agent connect. It generates a dual-channel stereo audio track.
-  * `recordingStatusCallback`: Binds the event webhook to send recording details back to our database endpoint upon completion.
-* **`dial.client('mahmoud_browser');`**
-  Appends a `<Client>` node targeting `'mahmoud_browser'`. This instructs Twilio to route the call to the registered WebRTC browser client.
-* **`else if (to) {`**
-  Executes if the call destination is another phone number, meaning this is an **outgoing call** from the browser.
-* **`const dial = twiml.dial({ callerId: ... });`**
-  Appends a `<Dial>` node configured for outgoing calls. The `callerId` is set to our Twilio number so the recipient sees our business number.
-* **`if (to.startsWith('client:')) { dial.client(...); }`**
-  Checks if the dialer is calling another browser client directly. If yes, it strips the prefix and connects to their client ID.
-* **`else { dial.number(to); }`**
-  Otherwise, it treats the destination as a regular phone number and appends a `<Number>` node to dial the external line.
-* **`else { twiml.say(...); }`**
-  Fallback route. If no destination parameter `to` is passed, it reads a voice message to the user.
-* **`return { status: 200, type: 'text/xml', content: twiml.toString() };`**
-  Compiles and returns the TwiML XML string with the correct content-type header (`text/xml`).
+#### 🔍 Deep-Dive Explanation
+* **TwiML Initialization (`new twilio.twiml.VoiceResponse()`):**
+  * TwiML (Twilio Markup Language) is a set of XML instructions that tell Twilio how to handle phone calls. The `VoiceResponse` helper class allows you to build this XML structure using JavaScript methods instead of writing raw XML strings manually.
+* **Dynamic Webhook Callback Host (`callbackUrl`):**
+  * Combines the host domain (passed from the request headers, which handles dynamic ngrok URLs automatically) with the `/recording-callback` endpoint.
+* **Scenario A: Incoming call (`to === Twilio_Phone_Number`):**
+  * When an external phone call is received on your Twilio number, this block runs:
+    * **`twiml.dial({ ... })`**: Creates a `<Dial>` element.
+      * `record: 'record-from-answer-dual'`: Instructs Twilio to start recording the call as soon as it is answered. It records the call in **stereo format** (dual-channel), placing the external caller on one audio channel and the browser client on the other.
+      * `recordingStatusCallback`: Tells Twilio where to send the recording data once the call ends and the audio file is ready.
+    * **`dial.client('mahmoud_browser')`**: Adds a `<Client>` node inside the `<Dial>` block. This tells Twilio to ring the browser WebRTC client registered with the identity `'mahmoud_browser'`.
+* **Scenario B: Outgoing Call (`else if (to)`):**
+  * Run when a call is initiated from the WebRTC client:
+    * **`callerId`**: Configures the caller ID to show your purchased Twilio phone number on the recipient's phone.
+    * **`client:` Check**: Checks if the target recipient starts with `'client:'`. If yes, it routes the call to another WebRTC browser user. Otherwise, it routes the call to a standard telephone line using `<Number>`.
+* **TwiML Serialization (`twiml.toString()`):**
+  * Compiles the JavaScript object into a standard TwiML XML string:
+    ```xml
+    <?xml version="1.0" encoding="UTF-8"?>
+    <Response>
+      <Dial callerId="+1..." record="record-from-answer-dual" recordingStatusCallback="https://...">
+        <Number>+201033599984</Number>
+      </Dial>
+    </Response>
+    ```
 
 ---
 
-### 🔹 Function: `getTestCallResponse(host)`
+## 📞 Section 5: Outbound REST Calls (Test Automation)
 
-Triggers an automated test call programmatically using the Twilio REST API.
+This function triggers a call programmatically from the backend using the Twilio REST API.
+
+### 🔹 Function: `getTestCallResponse(host)`
 
 ```javascript
 export async function getTestCallResponse(host) {
@@ -278,28 +274,26 @@ export async function getTestCallResponse(host) {
 }
 ```
 
-#### Line-by-Line Statement Explanation:
-* **`export async function getTestCallResponse(host) {`**
-  Declares and exports the asynchronous function.
-* **`const callbackUrl = \`https://\${host}/recording-callback\`;`**
-  Constructs the absolute callback URL for recording metadata.
-* **`const call = await twilioClient.calls.create({ ... });`**
-  Uses the pre-authenticated Twilio REST client to initiate a new call.
-  * `url`: Points to our server's `/voice` webhook. When the user answers, Twilio requests this URL to retrieve the TwiML routing instructions.
-  * `to`: The verified phone number to call.
-  * `from`: The caller ID (your Twilio phone number).
-  * `record: true`: Instructs Twilio to record the call.
-  * `recordingStatusCallback`: Sets the URL to receive recording metadata.
-* **`console.log(...);`**
-  Logs the unique Call SID (`CA...`) returned by Twilio to confirm the call was successfully queued.
-* **`return { status: 200, message: 'call has been sent' };`**
-  Returns a success response.
+#### 🔍 Deep-Dive Explanation
+* **`twilioClient.calls.create({ ... })`:**
+  * **Under the Hood:** Sends an HTTP `POST` request to Twilio's REST API endpoint:
+    `https://api.twilio.com/2010-04-01/Accounts/{AccountSid}/Calls.json`
+  * **Properties Configuration:**
+    * `url`: A webhook endpoint that Twilio calls as soon as the recipient answers. Twilio expects this endpoint to return TwiML routing instructions.
+    * `to`: The target phone number to receive the call.
+    * `from`: Your purchased Twilio phone number.
+    * `record: true`: Instructs Twilio to record the call.
+    * `recordingStatusCallback`: The webhook endpoint where Twilio will send the recording data once the call ends.
+* **`call.sid`:**
+  * The unique 34-character identifier (starting with `CA...`) generated by Twilio for this call leg. It is logged to the console to help track the call lifecycle.
 
 ---
 
-### 🔹 Function: `handleRecordingCallback(body)`
+## 🔴 Section 6: Recording Callback Webhook & Database persistence
 
-Handles the recording callback payload from Twilio, extracts metadata, and saves the entry to our local JSON database.
+This function receives recording metadata from Twilio once a call ends and saves it to the database.
+
+### 🔹 Function: `handleRecordingCallback(body)`
 
 ```javascript
 export function handleRecordingCallback(body) {
@@ -315,8 +309,10 @@ export function handleRecordingCallback(body) {
     timestamp: new Date().toISOString()
   };
 
+  // Add new recording to the beginning of the list
   recordings.unshift(recordingInfo);
   
+  // Keep only the last 100 recordings in memory/JSON
   if (recordings.length > 100) {
     recordings.pop();
   }
@@ -338,73 +334,24 @@ export function handleRecordingCallback(body) {
 }
 ```
 
-#### Line-by-Line Statement Explanation:
-* **`export function handleRecordingCallback(body) {`**
-  Declares and exports the webhook handler. It accepts the parsed POST request body containing the recording parameters.
-* **`const { CallSid, RecordingUrl, RecordingDuration, RecordingSid } = body;`**
-  Destructures the parameters sent by Twilio:
-  * `CallSid`: The unique identifier for the call.
-  * `RecordingUrl`: The direct link to the recording media.
-  * `RecordingDuration`: The duration of the recording in seconds.
-  * `RecordingSid`: The unique identifier for the recording.
-* **`const recordings = readRecordingsFromFile();`**
-  Reads the existing database records from `db/recordings.json`.
-* **`const recordingInfo = { ... };`**
-  Compiles the recording descriptor:
-  * `.mp3` is appended to the `RecordingUrl` to allow direct audio playback in modern browsers.
-  * Captures the current date and time in ISO format.
-* **`recordings.unshift(recordingInfo);`**
-  Adds the new record to the beginning (index `0`) of the array so new calls show up at the top of the list in the UI.
-* **`if (recordings.length > 100) { recordings.pop(); }`**
-  Keeps the database file small by limiting it to the last 100 calls. If there are more than 100 records, the oldest record (at the end of the array) is removed.
-* **`writeRecordingsToFile(recordings);`**
-  Saves the updated recordings array back to `db/recordings.json`.
-* **`console.log(...);`**
-  Prints details about the saved recording to the console for developers.
-* **`return { status: 200, message: '...' };`**
-  Returns a success response back to Twilio to acknowledge receipt of the webhook.
+#### 🔍 Deep-Dive Explanation
+* **Destructuring properties (`const { ... } = body;`):**
+  * When a call ends, Twilio's servers process the audio recording and send an HTTP `POST` request to our `/recording-callback` URL. The request payload contains the following parameters:
+    * `CallSid`: The unique call identifier.
+    * `RecordingSid`: The unique recording identifier (starts with `RE...`).
+    * `RecordingDuration`: The duration of the recording in seconds.
+    * `RecordingUrl`: The direct link to the recording media on Twilio's servers.
+* **Constructing Recording Metadata (`recordingInfo`):**
+  * **`.mp3` Extension Appending:** By default, the `RecordingUrl` returned by Twilio has no file extension. By appending `.mp3` to the URL, we enable browsers to stream the audio file directly using standard HTML5 `<audio>` players.
+  * **Timestamping:** Logs the date and time when the recording was saved.
+* **Array Management (`unshift` & `pop`):**
+  * **`recordings.unshift(...)`**: Adds the new record to the beginning of the array so that the newest recordings are displayed first in the UI sidebar.
+  * **`recordings.pop()`**: If the database grows beyond 100 entries, this removes the oldest entry to save disk space.
+* **`writeRecordingsToFile(recordings)`**: Saves the updated array back to disk.
 
 ---
 
-### 🔹 Function: `getRecordingsList()`
-
-Retrieves all stored records in the filesystem.
-
-```javascript
-export function getRecordingsList() {
-  return {
-    status: 200,
-    data: readRecordingsFromFile()
-  };
-}
-```
-#### Line-by-Line Statement Explanation:
-* **`export function getRecordingsList() {`**
-  Declares and exports the getter function.
-* **`return { status: 200, data: readRecordingsFromFile() };`**
-  Reads the database file using the read helper and returns the records array.
-
----
-
-## 🗂️ Persistent Data Schema (`db/recordings.json`)
-
-The database stores records using the following structure:
-
-```json
-[
-  {
-    "callSid": "CAa7dc401f8d839bb002cf7f7911b3be05",
-    "recordingSid": "RE726f1c4e9cb7254f16df33be85e2b4f9",
-    "duration": "14",
-    "url": "https://api.twilio.com/2010-04-01/Accounts/AC.../Recordings/RE...mp3",
-    "timestamp": "2026-05-20T10:04:13.204Z"
-  }
-]
-```
-
----
-
-## 👤 Maintainer & Lead Developer Profile
+## 👤 Maintainer & Project Lead Profile
 
 This project and its backend services are designed, documented, and maintained by:
 
